@@ -199,3 +199,25 @@ async def test_huggingface_model_fallback_on_400_unsupported():
     finally:
         httpx.AsyncClient = orig_async_client
 
+
+@pytest.mark.asyncio
+async def test_huggingface_exhausted_credits_raises_402():
+    """Verify provider raises LLMProviderError with 402 on exhausted credits."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            status_code=402,
+            json={"error": "You have no remaining credits."},
+        )
+
+    provider = HuggingFaceProvider(token="test_token")
+    orig_async_client = httpx.AsyncClient
+    try:
+        httpx.AsyncClient = lambda **kwargs: orig_async_client(transport=httpx.MockTransport(handler))
+        with pytest.raises(LLMProviderError) as exc_info:
+            await provider.generate([ChatMessage(role="user", content="Hi")], 0.7)
+        assert exc_info.value.status_code == 402
+        assert "credits" in exc_info.value.message.lower()
+    finally:
+        httpx.AsyncClient = orig_async_client
+
+

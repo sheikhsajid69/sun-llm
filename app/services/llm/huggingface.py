@@ -156,6 +156,13 @@ class HuggingFaceProvider(LLMProvider):
                 "Invalid or expired Hugging Face token. Please verify HF_TOKEN.",
                 provider="huggingface",
             )
+        elif response.status_code == 402:
+            raise LLMProviderError(
+                "Hugging Face account has exhausted its Inference Provider credits. "
+                "Add pre-paid credits at https://huggingface.co/settings/billing or use a free provider like Groq.",
+                status_code=402,
+                provider="huggingface",
+            )
         elif response.status_code == 404:
             raise LLMModelNotFoundError(
                 f"Hugging Face model '{self.model}' not found or chat interface not supported.",
