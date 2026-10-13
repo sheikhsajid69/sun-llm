@@ -30,7 +30,7 @@ class HuggingFaceProvider(LLMProvider):
         self,
         token: str = "",
         model: str = "mistralai/Mistral-7B-Instruct-v0.2",
-        base_url: str = "https://api-inference.huggingface.co/models",
+        base_url: str = "https://router.huggingface.co/hf-inference/v1/chat/completions",
         timeout: float = 120.0,
     ):
         self.token = token.strip()
@@ -62,8 +62,10 @@ class HuggingFaceProvider(LLMProvider):
         """Call Hugging Face Chat Completions endpoint."""
         headers = self._get_headers()
 
-        # Resolve OpenAI-compatible endpoint on Hugging Face inference API
-        if self.base_url.endswith("/v1/chat/completions") or self.base_url.endswith("/chat/completions"):
+        # Resolve modern Hugging Face router endpoint (auto-migrating legacy api-inference URL)
+        if "api-inference.huggingface.co" in self.base_url or not self.base_url:
+            url = "https://router.huggingface.co/hf-inference/v1/chat/completions"
+        elif self.base_url.endswith("/v1/chat/completions") or self.base_url.endswith("/chat/completions"):
             url = self.base_url
         else:
             url = f"{self.base_url}/{self.model}/v1/chat/completions"

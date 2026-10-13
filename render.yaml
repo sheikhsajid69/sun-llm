@@ -13,6 +13,8 @@ services:
         sync: false
       - key: HF_MODEL
         value: mistralai/Mistral-7B-Instruct-v0.2
+      - key: HF_BASE_URL
+        value: https://router.huggingface.co/hf-inference/v1/chat/completions
       - key: MAX_HISTORY_MESSAGES
         value: "10"
       - key: LLM_TIMEOUT
