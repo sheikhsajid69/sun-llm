@@ -12,7 +12,7 @@ services:
       - key: HF_TOKEN
         sync: false
       - key: HF_MODEL
-        value: mistralai/Mistral-7B-Instruct-v0.2
+        value: Qwen/Qwen2.5-7B-Instruct
       - key: HF_BASE_URL
         value: https://router.huggingface.co/hf-inference/v1/chat/completions
       - key: MAX_HISTORY_MESSAGES

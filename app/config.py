@@ -48,7 +48,7 @@ class Settings:
         default_factory=lambda: os.getenv("HF_TOKEN", "")
     )
     hf_model: str = field(
-        default_factory=lambda: os.getenv("HF_MODEL", "mistralai/Mistral-7B-Instruct-v0.2")
+        default_factory=lambda: os.getenv("HF_MODEL", "Qwen/Qwen2.5-7B-Instruct")
     )
     hf_base_url: str = field(
         default_factory=lambda: os.getenv("HF_BASE_URL", "https://router.huggingface.co/hf-inference/v1/chat/completions").rstrip("/")

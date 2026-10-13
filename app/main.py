@@ -9,7 +9,7 @@ import logging
 from typing import AsyncGenerator
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from app.config import Settings, get_settings
@@ -57,6 +57,31 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Mount Chat & Health API Routes
     application.include_router(chat_router)
 
+    FAVICON_SVG = (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
+        '<defs>'
+        '<linearGradient id="sunGrad" x1="0%" y1="0%" x2="100%" y2="100%">'
+        '<stop offset="0%" stop-color="#5266eb"/>'
+        '<stop offset="50%" stop-color="#7a8aff"/>'
+        '<stop offset="100%" stop-color="#9cb4e8"/>'
+        '</linearGradient>'
+        '<linearGradient id="glowGrad" x1="0%" y1="0%" x2="100%" y2="100%">'
+        '<stop offset="0%" stop-color="#5266eb" stop-opacity="0.8"/>'
+        '<stop offset="100%" stop-color="#edecfb" stop-opacity="0.2"/>'
+        '</linearGradient>'
+        '</defs>'
+        '<rect width="32" height="32" rx="8" fill="#12121b"/>'
+        '<circle cx="16" cy="16" r="11" fill="none" stroke="url(#glowGrad)" stroke-width="1.5" stroke-dasharray="3 2"/>'
+        '<circle cx="16" cy="16" r="7.5" fill="url(#sunGrad)"/>'
+        '<circle cx="16" cy="16" r="3" fill="#ffffff" fill-opacity="0.9"/>'
+        '</svg>'
+    )
+
+    @application.get("/favicon.ico", include_in_schema=False)
+    async def get_favicon() -> Response:
+        """Serve application favicon as SVG."""
+        return Response(content=FAVICON_SVG, media_type="image/svg+xml")
+
     # Root Web UI endpoint
     @application.get("/", response_class=HTMLResponse, tags=["ui"])
     async def render_chat_ui(request: Request) -> HTMLResponse:
@@ -65,7 +90,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             request=request,
             name="index.html",
             context={
-                "title": "LLM Chatbot",
+                "title": "SUN-LLM",
                 "provider": "huggingface" if app_settings.use_hf else "ollama",
                 "model": (
                     app_settings.hf_model

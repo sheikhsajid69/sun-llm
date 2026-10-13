@@ -26,15 +26,17 @@ logger = logging.getLogger(__name__)
 class HuggingFaceProvider(LLMProvider):
     """Provider for Hugging Face Inference API."""
 
+    DEFAULT_MODEL = "Qwen/Qwen2.5-7B-Instruct"
+
     def __init__(
         self,
         token: str = "",
-        model: str = "mistralai/Mistral-7B-Instruct-v0.2",
+        model: str = DEFAULT_MODEL,
         base_url: str = "https://router.huggingface.co/hf-inference/v1/chat/completions",
         timeout: float = 120.0,
     ):
         self.token = token.strip()
-        self.model = model.strip()
+        self.model = model.strip() or self.DEFAULT_MODEL
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
 
@@ -80,7 +82,7 @@ class HuggingFaceProvider(LLMProvider):
             "temperature": clamped_temp,
         }
 
-        logger.debug("Dispatching request to Hugging Face endpoint: %s", url)
+        logger.debug("Dispatching request to Hugging Face endpoint: %s with model %s", url, self.model)
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -103,6 +105,21 @@ class HuggingFaceProvider(LLMProvider):
                 f"Unexpected error communicating with Hugging Face: {str(err)}",
                 provider="huggingface",
             ) from err
+
+        # Self-healing fallback: If model is not supported on hf-inference, retry with active open model
+        if response.status_code == 400 and "not supported" in response.text.lower() and self.model != self.DEFAULT_MODEL:
+            logger.warning(
+                "Model '%s' is not supported by hf-inference. Automatically falling back to '%s'.",
+                self.model,
+                self.DEFAULT_MODEL,
+            )
+            self.model = self.DEFAULT_MODEL
+            payload["model"] = self.DEFAULT_MODEL
+            try:
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    response = await client.post(url, headers=headers, json=payload)
+            except Exception as err:
+                logger.error("Failed during fallback model inference: %s", err)
 
         if response.status_code in (401, 403):
             raise LLMAuthenticationError(

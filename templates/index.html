@@ -3,211 +3,446 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LLM Chatbot</title>
+  <title>{{ title | default('SUN-LLM • Autonomous Inference Engine') }}</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@350;400;480;500;600&display=swap" rel="stylesheet">
   <style>
+    /* -------------------------------------------------------------------------
+       Mercury Design Language Tokens
+       Palette: Deep ink-violet night, confident indigo action pill, soft translucent layers
+       ------------------------------------------------------------------------- */
     :root {
-      --bg: #0f0f12;
-      --surface: #1a1a1f;
-      --border: #2a2a32;
-      --text: #e8e8ed;
-      --text-muted: #8888a0;
-      --accent: #6c5ce7;
-      --accent-hover: #5b4cdb;
-      --user-msg: #2d2d38;
-      --bot-msg: #252530;
-      --radius: 12px;
-      --font: 'DM Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --night: #12121b;
+      --night-raised: #1a1a27;
+      --night-card: #161623;
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-hover: rgba(156, 180, 232, 0.25);
+      --primary: #5266eb;
+      --primary-hover: #4355d6;
+      --periwinkle: #9cb4e8;
+      --lavender: #edecfb;
+      --text-on-dark: #ededf3;
+      --text-muted: #8b8ba0;
+      --text-dim: #606074;
+      --font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --radius-pill: 40px;
+      --shadow-elevation: 0 24px 48px -12px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.06);
     }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
-      font-family: var(--font);
-      background: var(--bg);
-      color: var(--text);
+      font-family: var(--font-family);
+      background-color: var(--night);
+      background-image: 
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(82, 102, 235, 0.15), transparent 70%),
+        radial-gradient(circle at 10% 90%, rgba(156, 180, 232, 0.05), transparent 40%);
+      color: var(--text-on-dark);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 1.5rem 1rem;
+      justify-content: space-between;
+      padding: 2rem 1rem 1.5rem;
+      -webkit-font-smoothing: antialiased;
     }
+
+    /* -------------------------------------------------------------------------
+       Mercury Header
+       ------------------------------------------------------------------------- */
     header {
+      width: 100%;
+      max-width: 680px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
       text-align: center;
-      margin-bottom: 1.25rem;
+      margin-bottom: 1.5rem;
+      gap: 0.6rem;
     }
+
+    .brand-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--periwinkle);
+      background: rgba(82, 102, 235, 0.12);
+      border: 1px solid rgba(82, 102, 235, 0.25);
+      padding: 0.35rem 0.85rem;
+      border-radius: var(--radius-pill);
+    }
+
+    .brand-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .logo-orb {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--periwinkle) 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 16px rgba(82, 102, 235, 0.4);
+    }
+
     h1 {
-      font-size: 1.5rem;
-      font-weight: 600;
-      margin-bottom: 0.35rem;
-      color: var(--text);
+      font-size: 1.65rem;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+      color: var(--text-on-dark);
     }
+
     .subtitle {
-      font-size: 0.85rem;
+      font-size: 0.86rem;
       color: var(--text-muted);
+      font-weight: 350;
     }
+
+    /* -------------------------------------------------------------------------
+       Mercury Card Canvas (Chat Container)
+       ------------------------------------------------------------------------- */
     .chat-container {
       width: 100%;
-      max-width: 620px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
+      max-width: 680px;
+      background: var(--night-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
       overflow: hidden;
       display: flex;
       flex-direction: column;
-      height: 75vh;
+      height: 68vh;
       min-height: 480px;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      box-shadow: var(--shadow-elevation);
+      backdrop-filter: blur(20px);
+      transition: border-color 0.3s ease;
     }
+
+    .chat-container:hover {
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+
     #chat-messages {
       flex: 1;
       overflow-y: auto;
-      padding: 1.25rem;
+      padding: 1.5rem;
       display: flex;
       flex-direction: column;
-      gap: 0.85rem;
+      gap: 1rem;
       scroll-behavior: smooth;
     }
+
+    /* Scrollbar styling */
+    #chat-messages::-webkit-scrollbar { width: 6px; }
+    #chat-messages::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 3px;
+    }
+
+    /* -------------------------------------------------------------------------
+       Message Bubbles
+       ------------------------------------------------------------------------- */
     .message {
-      max-width: 85%;
-      padding: 0.85rem 1.1rem;
-      border-radius: var(--radius);
-      font-size: 0.95rem;
-      line-height: 1.5;
+      max-width: 82%;
+      padding: 0.95rem 1.25rem;
+      font-size: 0.94rem;
+      line-height: 1.55;
       white-space: pre-wrap;
       word-break: break-word;
+      transition: transform 0.15s ease;
     }
+
     .message.user {
       align-self: flex-end;
-      background: var(--accent);
+      background: var(--primary);
       color: #ffffff;
-      border-bottom-right-radius: 4px;
+      border-radius: 18px 18px 4px 18px;
+      box-shadow: 0 4px 16px rgba(82, 102, 235, 0.3);
     }
+
     .message.assistant {
       align-self: flex-start;
-      background: var(--bot-msg);
-      border: 1px solid var(--border);
-      color: var(--text);
-      border-bottom-left-radius: 4px;
+      background: var(--night-raised);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-on-dark);
+      border-radius: 18px 18px 18px 4px;
     }
+
     .message .role-label {
-      font-size: 0.7rem;
+      font-size: 0.68rem;
       text-transform: uppercase;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.08em;
       opacity: 0.75;
       margin-bottom: 0.35rem;
       font-weight: 600;
     }
+
+    .message.user .role-label { color: rgba(255, 255, 255, 0.85); }
+    .message.assistant .role-label { color: var(--periwinkle); }
+
+    /* -------------------------------------------------------------------------
+       Input Area & Mercury Action Pill
+       ------------------------------------------------------------------------- */
     .input-area {
-      padding: 1rem 1.25rem;
-      border-top: 1px solid var(--border);
-      background: rgba(26, 26, 31, 0.95);
+      padding: 1.15rem 1.4rem;
+      border-top: 1px solid var(--border-subtle);
+      background: rgba(22, 22, 35, 0.95);
       display: flex;
       flex-direction: column;
-      gap: 0.75rem;
+      gap: 0.85rem;
     }
+
     .input-row {
       display: flex;
-      gap: 0.65rem;
+      gap: 0.75rem;
+      align-items: center;
     }
+
     #message-input {
       flex: 1;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--text);
-      padding: 0.75rem 1rem;
-      font-size: 0.95rem;
+      background: rgba(18, 18, 27, 0.9);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      color: var(--text-on-dark);
+      padding: 0.85rem 1.15rem;
+      font-size: 0.94rem;
       font-family: inherit;
       resize: none;
-      min-height: 46px;
-      max-height: 140px;
+      min-height: 48px;
+      max-height: 120px;
       line-height: 1.4;
-      transition: border-color 0.2s ease;
+      transition: all 0.2s ease;
     }
-    #message-input::placeholder { color: var(--text-muted); }
+
+    #message-input::placeholder { color: var(--text-dim); }
+
     #message-input:focus {
       outline: none;
-      border-color: var(--accent);
+      border-color: var(--primary);
+      background: rgba(26, 26, 39, 0.95);
+      box-shadow: 0 0 0 3px rgba(82, 102, 235, 0.2);
     }
+
+    /* Confident Indigo Action Pill */
     #send-btn {
-      background: var(--accent);
-      color: #fff;
+      background: var(--primary);
+      color: #ffffff;
       border: none;
-      border-radius: 8px;
-      padding: 0 1.35rem;
-      font-size: 0.95rem;
+      border-radius: var(--radius-pill);
+      padding: 0 1.6rem;
+      height: 48px;
+      font-size: 0.92rem;
       font-weight: 500;
       cursor: pointer;
       font-family: inherit;
-      transition: background 0.2s ease, opacity 0.2s ease;
-      display: flex;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      display: inline-flex;
       align-items: center;
       justify-content: center;
+      gap: 0.4rem;
+      box-shadow: 0 4px 16px rgba(82, 102, 235, 0.35);
     }
-    #send-btn:hover:not(:disabled) { background: var(--accent-hover); }
+
+    #send-btn:hover:not(:disabled) {
+      background: var(--primary-hover);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(82, 102, 235, 0.45);
+    }
+
     #send-btn:disabled {
-      opacity: 0.5;
+      opacity: 0.45;
       cursor: not-allowed;
+      transform: none;
     }
+
+    /* -------------------------------------------------------------------------
+       Controls & Live Status Bar
+       ------------------------------------------------------------------------- */
     .controls {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      font-size: 0.85rem;
+      font-size: 0.82rem;
       color: var(--text-muted);
     }
+
     .controls label {
       display: flex;
       align-items: center;
-      gap: 0.5rem;
+      gap: 0.6rem;
       cursor: pointer;
     }
+
     #temperature {
-      width: 110px;
-      height: 6px;
-      accent-color: var(--accent);
+      width: 100px;
+      height: 5px;
+      accent-color: var(--primary);
       cursor: pointer;
     }
+
     #temperature-value {
       min-width: 2.5ch;
       font-weight: 500;
-      color: var(--text);
+      color: var(--text-on-dark);
     }
+
+    /* Translucent Secondary Pill (Clear Chat) */
+    #clear-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      border-radius: var(--radius-pill);
+      padding: 0.3rem 0.85rem;
+      font-size: 0.76rem;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    #clear-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-on-dark);
+      border-color: rgba(255, 255, 255, 0.18);
+    }
+
     .status-bar {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 0.5rem;
-      font-size: 0.75rem;
+      font-size: 0.76rem;
       color: var(--text-muted);
-      margin-top: 0.25rem;
+      padding-top: 0.2rem;
     }
-    .status-text {
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .status-text.error { color: #f87171; font-weight: 500; }
-    .status-text.ok { color: #4ade80; }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #4ade80;
+      box-shadow: 0 0 8px #4ade80;
+    }
+
+    .status-dot.error { background: #f87171; box-shadow: 0 0 8px #f87171; }
+    .status-dot.pulse { animation: pulseDot 1.4s infinite ease-in-out; }
+
+    @keyframes pulseDot {
+      0%, 100% { opacity: 0.4; transform: scale(0.9); }
+      50% { opacity: 1; transform: scale(1.15); }
+    }
+
     .typing {
-      opacity: 0.8;
+      opacity: 0.85;
       font-style: italic;
     }
-    .dot-flashing {
-      display: inline-block;
-      animation: pulse 1.2s infinite ease-in-out;
+
+    /* -------------------------------------------------------------------------
+       Mercury Footer & Socials Section
+       ------------------------------------------------------------------------- */
+    footer {
+      width: 100%;
+      max-width: 680px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.85rem;
+      margin-top: 1.5rem;
+      padding: 0.5rem 0;
     }
-    @keyframes pulse {
-      0%, 100% { opacity: 0.3; }
-      50% { opacity: 1; }
+
+    .socials-nav {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.65rem;
     }
+
+    .social-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      font-size: 0.78rem;
+      font-weight: 480;
+      color: var(--text-muted);
+      text-decoration: none;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-pill);
+      padding: 0.4rem 0.95rem;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .social-pill:hover {
+      background: rgba(82, 102, 235, 0.15);
+      border-color: rgba(82, 102, 235, 0.4);
+      color: var(--text-on-dark);
+      transform: translateY(-1px);
+    }
+
+    .social-pill svg {
+      width: 14px;
+      height: 14px;
+      fill: currentColor;
+    }
+
+    .footer-copy {
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      text-align: center;
+    }
+
+    .footer-copy a {
+      color: var(--periwinkle);
+      text-decoration: none;
+    }
+
+    .footer-copy a:hover { text-decoration: underline; }
   </style>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
 </head>
 <body>
   <header>
-    <h1>{{ title | default('LLM Chatbot') }}</h1>
-    <p class="subtitle">{{ (provider | default('Ollama')) | capitalize }} ({{ model | default('Local') }}) · Bounded Multi-Turn Memory</p>
+    <div class="brand-eyebrow">
+      <span>●</span>
+      <span>Autonomous Generative Engine</span>
+    </div>
+    <div class="brand-title-wrap">
+      <div class="logo-orb">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="5"></circle>
+          <line x1="12" y1="1" x2="12" y2="3"></line>
+          <line x1="12" y1="21" x2="12" y2="23"></line>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+          <line x1="1" y1="12" x2="3" y2="12"></line>
+          <line x1="21" y1="12" x2="23" y2="12"></line>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+      </div>
+      <h1>{{ title | default('SUN-LLM') }}</h1>
+    </div>
+    <p class="subtitle">{{ (provider | default('Ollama')) | capitalize }} ({{ model | default('local') }}) • Deterministic Bounded Memory</p>
   </header>
 
   <main class="chat-container">
@@ -221,21 +456,54 @@
           rows="1"
           aria-label="Chat input"
         ></textarea>
-        <button id="send-btn" type="button" aria-label="Send message">Send</button>
+        <button id="send-btn" type="button" aria-label="Send message">
+          <span>Send</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+        </button>
       </div>
       <div class="controls">
         <label for="temperature">
-          Temperature:
+          <span>Temperature:</span>
           <input type="range" id="temperature" min="0" max="2" step="0.1" value="0.7">
           <span id="temperature-value">0.7</span>
         </label>
-        <button id="clear-btn" type="button" style="background: none; border: none; color: var(--text-muted); font-size: 0.75rem; cursor: pointer; text-decoration: underline;">Clear chat</button>
+        <button id="clear-btn" type="button">Clear conversation</button>
       </div>
       <div class="status-bar">
-        <div id="status" class="status-text">Checking backend status...</div>
+        <div id="status" class="status-badge">
+          <span id="status-dot" class="status-dot pulse"></span>
+          <span id="status-text">Connecting to backend runtime...</span>
+        </div>
       </div>
     </div>
   </main>
+
+  <footer>
+    <nav class="socials-nav" aria-label="Social links">
+      <a class="social-pill" href="https://github.com/sheikhsajid69" target="_blank" rel="noopener noreferrer">
+        <svg viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+        <span>GitHub</span>
+      </a>
+      <a class="social-pill" href="https://github.com/sheikhsajid69/sun-llm" target="_blank" rel="noopener noreferrer">
+        <svg viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+        <span>sun-llm Repo</span>
+      </a>
+      <a class="social-pill" href="https://www.linkedin.com/in/sheikhsajid69" target="_blank" rel="noopener noreferrer">
+        <svg viewBox="0 0 24 24"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
+        <span>LinkedIn</span>
+      </a>
+      <a class="social-pill" href="mailto:sheikhsajid.com@gmail.com">
+        <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
+        <span>Contact</span>
+      </a>
+    </nav>
+    <p class="footer-copy">
+      SUN-LLM • Crafted by <a href="https://github.com/sheikhsajid69" target="_blank" rel="noopener noreferrer">Sheikh Sajid</a> • Inspired by Mercury Design Language
+    </p>
+  </footer>
 
   <script>
     const messagesEl = document.getElementById('chat-messages');
@@ -244,17 +512,21 @@
     const clearBtn = document.getElementById('clear-btn');
     const tempSlider = document.getElementById('temperature');
     const tempValue = document.getElementById('temperature-value');
-    const statusEl = document.getElementById('status');
+    const statusTextEl = document.getElementById('status-text');
+    const statusDotEl = document.getElementById('status-dot');
 
-    // In-memory conversation history kept for client synchronization
     let conversationHistory = [];
 
     function setStatus(text, type = 'normal') {
-      statusEl.textContent = text;
-      statusEl.className = 'status-text' + (type === 'error' ? ' error' : type === 'ok' ? ' ok' : '');
+      statusTextEl.textContent = text;
+      statusDotEl.className = 'status-dot';
+      if (type === 'error') {
+        statusDotEl.classList.add('error');
+      } else if (type === 'loading') {
+        statusDotEl.classList.add('pulse');
+      }
     }
 
-    // Safely append a message to chat window using standard DOM text nodes (no XSS risk)
     function appendMessage(role, content) {
       const msgDiv = document.createElement('div');
       msgDiv.className = 'message ' + (role === 'user' ? 'user' : 'assistant');
@@ -272,7 +544,6 @@
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
-    // Toggle typing indicator
     function showTyping(show) {
       let el = document.getElementById('typing-indicator');
       if (show) {
@@ -287,8 +558,7 @@
           el.appendChild(label);
 
           const text = document.createElement('div');
-          text.className = 'dot-flashing';
-          text.textContent = 'Thinking...';
+          text.textContent = 'Generating response...';
           el.appendChild(text);
 
           messagesEl.appendChild(el);
@@ -308,7 +578,7 @@
       sendBtn.disabled = true;
       appendMessage('user', message);
       showTyping(true);
-      setStatus('Generating response...');
+      setStatus('Synthesizing...', 'loading');
 
       const temperature = parseFloat(tempSlider.value);
 
@@ -333,7 +603,7 @@
         conversationHistory = data.history || [];
         showTyping(false);
         appendMessage('assistant', data.reply);
-        setStatus(`Provider: ${data.provider} | Model: ${data.model_used}`, 'ok');
+        setStatus(`Connected: ${data.provider} (${data.model_used})`, 'ok');
       } catch (err) {
         showTyping(false);
         setStatus(`Error: ${err.message}`, 'error');
@@ -343,7 +613,6 @@
       }
     }
 
-    // Event listeners
     sendBtn.addEventListener('click', sendMessage);
 
     inputEl.addEventListener('keydown', (e) => {
@@ -356,20 +625,19 @@
     clearBtn.addEventListener('click', () => {
       conversationHistory = [];
       messagesEl.innerHTML = '';
-      setStatus('Conversation cleared.');
+      setStatus('Conversation cleared.', 'ok');
     });
 
     tempSlider.addEventListener('input', () => {
       tempValue.textContent = tempSlider.value;
     });
 
-    // Initial Health Check on page load
     async function checkHealth() {
       try {
         const res = await fetch('/health');
         const data = await res.json();
         if (data.status === 'ok') {
-          setStatus(`Backend Ready: ${data.provider} (${data.model})`, 'ok');
+          setStatus(`Ready: ${data.provider} (${data.model})`, 'ok');
         } else {
           const detail = data.details?.error || data.status || 'degraded';
           setStatus(`Backend Degraded: ${data.provider} (${detail})`, 'error');

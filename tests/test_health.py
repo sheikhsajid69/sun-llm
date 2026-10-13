@@ -50,7 +50,18 @@ async def test_root_endpoint_returns_html():
         response = await client.get("/")
     assert response.status_code == 200
     assert "text/html" in response.headers.get("content-type", "")
-    assert "LLM Chatbot" in response.text
+    assert "SUN-LLM" in response.text
+
+
+@pytest.mark.asyncio
+async def test_favicon_endpoint_returns_svg():
+    """Verify that GET /favicon.ico serves valid SVG favicon."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/favicon.ico")
+    assert response.status_code == 200
+    assert "image/svg+xml" in response.headers.get("content-type", "")
+    assert "<svg" in response.text
 
 
 @pytest.mark.asyncio
