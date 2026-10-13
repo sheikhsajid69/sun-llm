@@ -12,9 +12,9 @@ services:
       - key: HF_TOKEN
         sync: false
       - key: HF_MODEL
-        value: Qwen/Qwen2.5-7B-Instruct
+        value: deepseek-ai/DeepSeek-V4.1-Flash
       - key: HF_BASE_URL
-        value: https://router.huggingface.co/hf-inference/v1/chat/completions
+        value: https://router.huggingface.co/v1/chat/completions
       - key: MAX_HISTORY_MESSAGES
         value: "10"
       - key: LLM_TIMEOUT

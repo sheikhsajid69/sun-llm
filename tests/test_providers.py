@@ -156,3 +156,46 @@ async def test_huggingface_rate_limit_raises_provider_error():
         assert exc_info.value.status_code == 429
     finally:
         httpx.AsyncClient = orig_async_client
+
+
+def test_huggingface_url_sanitization():
+    """Verify HuggingFaceProvider automatically sanitizes provider-pinned and legacy URLs."""
+    p1 = HuggingFaceProvider(token="tok", base_url="https://router.huggingface.co/hf-inference/v1/chat/completions")
+    assert p1._resolve_url() == "https://router.huggingface.co/v1/chat/completions"
+
+    p2 = HuggingFaceProvider(token="tok", base_url="https://api-inference.huggingface.co/models/mistral")
+    assert p2._resolve_url() == "https://router.huggingface.co/v1/chat/completions"
+
+    p3 = HuggingFaceProvider(token="tok", base_url="https://router.huggingface.co/v1")
+    assert p3._resolve_url() == "https://router.huggingface.co/v1/chat/completions"
+
+
+@pytest.mark.asyncio
+async def test_huggingface_model_fallback_on_400_unsupported():
+    """Verify provider retries with fallback model when HF returns 400 Model not supported."""
+    call_count = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return httpx.Response(
+                status_code=400,
+                json={"error": "Model not supported by provider hf-inference"},
+            )
+        return httpx.Response(
+            status_code=200,
+            json={"choices": [{"message": {"role": "assistant", "content": "Fallback success!"}}]},
+        )
+
+    provider = HuggingFaceProvider(token="test_token", model="mistralai/Mistral-7B-Instruct-v0.2")
+    orig_async_client = httpx.AsyncClient
+    try:
+        httpx.AsyncClient = lambda **kwargs: orig_async_client(transport=httpx.MockTransport(handler))
+        reply = await provider.generate([ChatMessage(role="user", content="Hi")], 0.7)
+        assert reply == "Fallback success!"
+        assert call_count == 2
+        assert provider.model in provider.FALLBACK_MODELS
+    finally:
+        httpx.AsyncClient = orig_async_client
+

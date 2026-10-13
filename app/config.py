@@ -48,10 +48,10 @@ class Settings:
         default_factory=lambda: os.getenv("HF_TOKEN", "")
     )
     hf_model: str = field(
-        default_factory=lambda: os.getenv("HF_MODEL", "Qwen/Qwen2.5-7B-Instruct")
+        default_factory=lambda: os.getenv("HF_MODEL", "deepseek-ai/DeepSeek-V4.1-Flash")
     )
     hf_base_url: str = field(
-        default_factory=lambda: os.getenv("HF_BASE_URL", "https://router.huggingface.co/hf-inference/v1/chat/completions").rstrip("/")
+        default_factory=lambda: os.getenv("HF_BASE_URL", "https://router.huggingface.co/v1/chat/completions").rstrip("/")
     )
 
     # Memory & Execution Limits

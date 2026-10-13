@@ -323,8 +323,8 @@ OLLAMA_MODEL=mistral
 
 # Hugging Face Settings (Applicable when USE_HF=true)
 HF_TOKEN=
-HF_MODEL=mistralai/Mistral-7B-Instruct-v0.2
-HF_BASE_URL=https://router.huggingface.co/hf-inference/v1/chat/completions
+HF_MODEL=deepseek-ai/DeepSeek-V4.1-Flash
+HF_BASE_URL=https://router.huggingface.co/v1/chat/completions
 
 # Context Memory & Performance Guards
 MAX_HISTORY_MESSAGES=10

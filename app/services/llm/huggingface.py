@@ -26,13 +26,20 @@ logger = logging.getLogger(__name__)
 class HuggingFaceProvider(LLMProvider):
     """Provider for Hugging Face Inference API."""
 
-    DEFAULT_MODEL = "Qwen/Qwen2.5-7B-Instruct"
+    DEFAULT_MODEL = "deepseek-ai/DeepSeek-V4.1-Flash"
+    FALLBACK_MODELS = (
+        "deepseek-ai/DeepSeek-V4.1-Flash",
+        "zai-org/GLM-5.3-Flash",
+        "Qwen/Qwen3.5-9B",
+        "microsoft/phi-4",
+        "meta-llama/Llama-3.1-8B-Instruct",
+    )
 
     def __init__(
         self,
         token: str = "",
         model: str = DEFAULT_MODEL,
-        base_url: str = "https://router.huggingface.co/hf-inference/v1/chat/completions",
+        base_url: str = "https://router.huggingface.co/v1/chat/completions",
         timeout: float = 120.0,
     ):
         self.token = token.strip()
@@ -60,66 +67,89 @@ class HuggingFaceProvider(LLMProvider):
             "Content-Type": "application/json",
         }
 
-    async def generate(self, messages: list[ChatMessage], temperature: float) -> str:
-        """Call Hugging Face Chat Completions endpoint."""
-        headers = self._get_headers()
+    def _resolve_url(self) -> str:
+        """Resolve modern Hugging Face router endpoint, sanitizing legacy or provider-pinned paths."""
+        url = self.base_url.strip()
+        # If the base URL specifies hf-inference or legacy api-inference, sanitize to the standard multi-provider router
+        if "api-inference.huggingface.co" in url or "hf-inference" in url or not url:
+            return "https://router.huggingface.co/v1/chat/completions"
+        if url.endswith("/v1/chat/completions") or url.endswith("/chat/completions"):
+            return url
+        if url.endswith("/v1"):
+            return f"{url}/chat/completions"
+        return f"{url}/v1/chat/completions"
 
-        # Resolve modern Hugging Face router endpoint (auto-migrating legacy api-inference URL)
-        if "api-inference.huggingface.co" in self.base_url or not self.base_url:
-            url = "https://router.huggingface.co/hf-inference/v1/chat/completions"
-        elif self.base_url.endswith("/v1/chat/completions") or self.base_url.endswith("/chat/completions"):
-            url = self.base_url
-        else:
-            url = f"{self.base_url}/{self.model}/v1/chat/completions"
+    async def generate(self, messages: list[ChatMessage], temperature: float) -> str:
+        """Call Hugging Face Chat Completions endpoint with automated multi-model fallback."""
+        headers = self._get_headers()
+        url = self._resolve_url()
 
         # Safe temperature clamping: some HF models require temperature > 0.0 or <= 1.5
         clamped_temp = max(0.01, min(temperature, 1.99)) if temperature > 0 else 0.01
 
-        payload = {
-            "model": self.model,
-            "messages": [{"role": m.role, "content": m.content} for m in messages],
-            "max_tokens": 1024,
-            "temperature": clamped_temp,
-        }
+        # Build sequence of models to try: requested model first, followed by verified fallbacks
+        models_to_try = [self.model]
+        for m in self.FALLBACK_MODELS:
+            if m not in models_to_try:
+                models_to_try.append(m)
 
-        logger.debug("Dispatching request to Hugging Face endpoint: %s with model %s", url, self.model)
+        last_response = None
+        for attempt_model in models_to_try:
+            payload = {
+                "model": attempt_model,
+                "messages": [{"role": m.role, "content": m.content} for m in messages],
+                "max_tokens": 1024,
+                "temperature": clamped_temp,
+            }
 
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(url, headers=headers, json=payload)
-        except httpx.ConnectError as err:
-            logger.error("Failed to connect to Hugging Face API: %s", err)
-            raise LLMConnectionError(
-                "Cannot connect to Hugging Face Inference API. Check network connectivity.",
-                provider="huggingface",
-            ) from err
-        except httpx.TimeoutException as err:
-            logger.error("Hugging Face generation timed out after %s seconds", self.timeout)
-            raise LLMTimeoutError(
-                f"Hugging Face request timed out after {self.timeout}s.",
-                provider="huggingface",
-            ) from err
-        except Exception as err:
-            logger.error("Unexpected error contacting Hugging Face: %s", err)
-            raise LLMProviderError(
-                f"Unexpected error communicating with Hugging Face: {str(err)}",
-                provider="huggingface",
-            ) from err
+            logger.debug("Dispatching request to Hugging Face endpoint: %s with model %s", url, attempt_model)
 
-        # Self-healing fallback: If model is not supported on hf-inference, retry with active open model
-        if response.status_code == 400 and "not supported" in response.text.lower() and self.model != self.DEFAULT_MODEL:
-            logger.warning(
-                "Model '%s' is not supported by hf-inference. Automatically falling back to '%s'.",
-                self.model,
-                self.DEFAULT_MODEL,
-            )
-            self.model = self.DEFAULT_MODEL
-            payload["model"] = self.DEFAULT_MODEL
             try:
                 async with httpx.AsyncClient(timeout=self.timeout) as client:
                     response = await client.post(url, headers=headers, json=payload)
+            except httpx.ConnectError as err:
+                logger.error("Failed to connect to Hugging Face API: %s", err)
+                raise LLMConnectionError(
+                    "Cannot connect to Hugging Face Inference API. Check network connectivity.",
+                    provider="huggingface",
+                ) from err
+            except httpx.TimeoutException as err:
+                logger.error("Hugging Face generation timed out after %s seconds", self.timeout)
+                raise LLMTimeoutError(
+                    f"Hugging Face request timed out after {self.timeout}s.",
+                    provider="huggingface",
+                ) from err
             except Exception as err:
-                logger.error("Failed during fallback model inference: %s", err)
+                logger.error("Unexpected error contacting Hugging Face: %s", err)
+                raise LLMProviderError(
+                    f"Unexpected error communicating with Hugging Face: {str(err)}",
+                    provider="huggingface",
+                ) from err
+
+            last_response = response
+
+            # Check if this model is unsupported by providers on the router
+            is_unsupported = (
+                response.status_code == 400
+                and any(k in response.text.lower() for k in ("not supported", "model", "provider"))
+            ) or response.status_code in (404, 422)
+
+            if is_unsupported:
+                logger.warning(
+                    "Model '%s' returned status %d ('%s'). Retrying with fallback model...",
+                    attempt_model,
+                    response.status_code,
+                    response.text[:120],
+                )
+                continue
+
+            # Model is supported and response received; update active model and exit attempt loop
+            self.model = attempt_model
+            break
+
+        response = last_response
+        if response is None:
+            raise LLMProviderError("No response received from Hugging Face.", provider="huggingface")
 
         if response.status_code in (401, 403):
             raise LLMAuthenticationError(
