@@ -34,6 +34,12 @@ class HuggingFaceProvider(LLMProvider):
         "microsoft/phi-4",
         "meta-llama/Llama-3.1-8B-Instruct",
     )
+    GROQ_FALLBACK_MODELS = (
+        "llama-3.1-8b-instant",
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
+        "llama-3.3-70b-versatile",
+    )
 
     def __init__(
         self,
@@ -100,21 +106,43 @@ class HuggingFaceProvider(LLMProvider):
             return f"{url}/chat/completions"
         return f"{url}/v1/chat/completions"
 
+    async def _get_active_groq_models(self) -> list[str]:
+        """Fetch list of active text models directly from Groq's live endpoint."""
+        try:
+            headers = self._get_headers()
+            async with httpx.AsyncClient(timeout=4.0) as client:
+                resp = await client.get("https://api.groq.com/openai/v1/models", headers=headers)
+            if resp.status_code == 200:
+                data = resp.json()
+                active = [
+                    m["id"]
+                    for m in data.get("data", [])
+                    if not any(k in m["id"].lower() for k in ("whisper", "guard", "orpheus", "distil", "preview"))
+                ]
+                if active:
+                    return active
+        except Exception as err:
+            logger.debug("Failed fetching dynamic Groq models: %s", err)
+        return list(self.GROQ_FALLBACK_MODELS)
+
     async def generate(self, messages: list[ChatMessage], temperature: float) -> str:
         """Call Chat Completions endpoint with automated multi-model fallback."""
         headers = self._get_headers()
         url = self._resolve_url()
+        provider_label = "Groq" if self.is_groq else "Hugging Face"
 
         # Safe temperature clamping
         clamped_temp = max(0.01, min(temperature, 1.99)) if temperature > 0 else 0.01
 
         # Build sequence of models to try
         if self.is_groq:
-            groq_fallbacks = ("llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768")
-            models_to_try = [self.model]
-            for m in groq_fallbacks:
+            active_groq = await self._get_active_groq_models()
+            models_to_try = [self.model] if self.model in active_groq else []
+            for m in active_groq:
                 if m not in models_to_try:
                     models_to_try.append(m)
+            if not models_to_try:
+                models_to_try = list(self.GROQ_FALLBACK_MODELS)
         else:
             models_to_try = [self.model]
             for m in self.FALLBACK_MODELS:
@@ -130,36 +158,46 @@ class HuggingFaceProvider(LLMProvider):
                 "temperature": clamped_temp,
             }
 
-            logger.debug("Dispatching request to Hugging Face endpoint: %s with model %s", url, attempt_model)
+            logger.debug("Dispatching request to %s endpoint: %s with model %s", provider_label, url, attempt_model)
 
             try:
                 async with httpx.AsyncClient(timeout=self.timeout) as client:
                     response = await client.post(url, headers=headers, json=payload)
             except httpx.ConnectError as err:
-                logger.error("Failed to connect to Hugging Face API: %s", err)
+                logger.error("Failed to connect to %s API: %s", provider_label, err)
                 raise LLMConnectionError(
-                    "Cannot connect to Hugging Face Inference API. Check network connectivity.",
-                    provider="huggingface",
+                    f"Cannot connect to {provider_label} Inference API. Check network connectivity.",
+                    provider=self.provider_name,
                 ) from err
             except httpx.TimeoutException as err:
-                logger.error("Hugging Face generation timed out after %s seconds", self.timeout)
+                logger.error("%s generation timed out after %s seconds", provider_label, self.timeout)
                 raise LLMTimeoutError(
-                    f"Hugging Face request timed out after {self.timeout}s.",
-                    provider="huggingface",
+                    f"{provider_label} request timed out after {self.timeout}s.",
+                    provider=self.provider_name,
                 ) from err
             except Exception as err:
-                logger.error("Unexpected error contacting Hugging Face: %s", err)
+                logger.error("Unexpected error contacting %s: %s", provider_label, err)
                 raise LLMProviderError(
-                    f"Unexpected error communicating with Hugging Face: {str(err)}",
-                    provider="huggingface",
+                    f"Unexpected error communicating with {provider_label}: {str(err)}",
+                    provider=self.provider_name,
                 ) from err
 
             last_response = response
 
-            # Check if this model is unsupported by providers on the router
+            # Check if this model is unsupported or decommissioned
             is_unsupported = (
                 response.status_code == 400
-                and any(k in response.text.lower() for k in ("not supported", "model", "provider"))
+                and any(
+                    k in response.text.lower()
+                    for k in (
+                        "not supported",
+                        "decommissioned",
+                        "deprecated",
+                        "not found",
+                        "does not exist",
+                        "model_decommissioned",
+                    )
+                )
             ) or response.status_code in (404, 422)
 
             if is_unsupported:
@@ -177,45 +215,44 @@ class HuggingFaceProvider(LLMProvider):
 
         response = last_response
         if response is None:
-            raise LLMProviderError("No response received from Hugging Face.", provider="huggingface")
+            raise LLMProviderError(f"No response received from {provider_label}.", provider=self.provider_name)
 
         if response.status_code in (401, 403):
             raise LLMAuthenticationError(
-                "Invalid or expired Hugging Face token. Please verify HF_TOKEN.",
-                provider="huggingface",
+                f"Invalid or expired {provider_label} token. Please verify API key.",
+                provider=self.provider_name,
             )
         elif response.status_code == 402:
             raise LLMProviderError(
-                "Hugging Face account has exhausted its Inference Provider credits. "
-                "Add pre-paid credits at https://huggingface.co/settings/billing or use a free provider like Groq.",
+                f"{provider_label} account has exhausted its credits. "
+                "Add pre-paid credits or switch to an active free provider.",
                 status_code=402,
-                provider="huggingface",
+                provider=self.provider_name,
             )
         elif response.status_code == 404:
             raise LLMModelNotFoundError(
-                f"Hugging Face model '{self.model}' not found or chat interface not supported.",
-                provider="huggingface",
+                f"{provider_label} model '{self.model}' not found or chat interface not supported.",
+                provider=self.provider_name,
             )
         elif response.status_code == 429:
             raise LLMProviderError(
-                "Hugging Face rate limit reached. Please wait and try again.",
+                f"{provider_label} rate limit reached. Please wait and try again.",
                 status_code=429,
-                provider="huggingface",
+                provider=self.provider_name,
             )
         elif response.status_code == 503:
-            # Model loading state often returns estimated_time in JSON
             try:
                 err_data = response.json()
                 est = err_data.get("estimated_time", "briefly")
-                msg = f"Model '{self.model}' is currently loading on Hugging Face (estimated: {est}s). Please retry."
+                msg = f"Model '{self.model}' is currently loading on {provider_label} (estimated: {est}s). Please retry."
             except Exception:
-                msg = f"Hugging Face service unavailable or model loading: {response.text[:150]}"
-            raise LLMProviderError(msg, status_code=503, provider="huggingface")
+                msg = f"{provider_label} service unavailable or model loading: {response.text[:150]}"
+            raise LLMProviderError(msg, status_code=503, provider=self.provider_name)
         elif response.status_code != 200:
             raise LLMProviderError(
-                f"Hugging Face returned status {response.status_code}: {response.text[:200]}",
+                f"{provider_label} returned status {response.status_code}: {response.text[:200]}",
                 status_code=502,
-                provider="huggingface",
+                provider=self.provider_name,
             )
 
         try:
