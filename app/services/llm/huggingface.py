@@ -67,7 +67,12 @@ class HuggingFaceProvider(LLMProvider):
         return (
             self.token.startswith("gsk_")
             or "groq.com" in self.base_url
-            or self.model in ("llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768")
+            or self.model in (
+                "llama-3.1-8b-instant",
+                "llama-3.3-70b-versatile",
+                "openai/gpt-oss-120b",
+                "openai/gpt-oss-20b",
+            )
         )
 
     def _get_headers(self) -> dict[str, str]:
