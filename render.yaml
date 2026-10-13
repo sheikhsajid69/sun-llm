@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: sun-llm
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: USE_HF
+        value: "true"
+      - key: HF_TOKEN
+        sync: false
+      - key: HF_MODEL
+        value: mistralai/Mistral-7B-Instruct-v0.2
+      - key: MAX_HISTORY_MESSAGES
+        value: "10"
+      - key: LLM_TIMEOUT
+        value: "120"
