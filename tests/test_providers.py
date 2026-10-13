@@ -221,3 +221,34 @@ async def test_huggingface_exhausted_credits_raises_402():
         httpx.AsyncClient = orig_async_client
 
 
+def test_groq_auto_detection():
+    """Verify HuggingFaceProvider auto-detects Groq by key prefix or model name."""
+    p_key = HuggingFaceProvider(token="gsk_1234567890abcdef")
+    assert p_key.is_groq is True
+    assert p_key.provider_name == "groq"
+    assert p_key._resolve_url() == "https://api.groq.com/openai/v1/chat/completions"
+
+    p_model = HuggingFaceProvider(token="some_tok", model="llama-3.3-70b-versatile")
+    assert p_model.is_groq is True
+    assert p_model._resolve_url() == "https://api.groq.com/openai/v1/chat/completions"
+
+
+@pytest.mark.asyncio
+async def test_groq_health_check_success():
+    """Verify Groq health check succeeds when Groq models endpoint returns 200."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert "api.groq.com" in str(request.url)
+        return httpx.Response(status_code=200, json={"data": [{"id": "llama-3.3-70b-versatile"}]})
+
+    provider = HuggingFaceProvider(token="gsk_test123", model="llama-3.3-70b-versatile")
+    orig_async_client = httpx.AsyncClient
+    try:
+        httpx.AsyncClient = lambda **kwargs: orig_async_client(transport=httpx.MockTransport(handler))
+        health = await provider.check_health()
+        assert health["reachable"] is True
+        assert health["provider"] == "groq"
+    finally:
+        httpx.AsyncClient = orig_async_client
+
+
+

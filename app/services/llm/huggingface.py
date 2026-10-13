@@ -49,18 +49,28 @@ class HuggingFaceProvider(LLMProvider):
 
     @property
     def provider_name(self) -> str:
-        return "huggingface"
+        return "groq" if self.is_groq else "huggingface"
 
     @property
     def model_name(self) -> str:
         return self.model
 
+    @property
+    def is_groq(self) -> bool:
+        """Detect whether the current provider configuration targets Groq."""
+        return (
+            self.token.startswith("gsk_")
+            or "groq.com" in self.base_url
+            or self.model in ("llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768")
+        )
+
     def _get_headers(self) -> dict[str, str]:
         if not self.token:
+            name = "Groq" if self.is_groq else "Hugging Face"
             raise LLMConfigurationError(
-                "Hugging Face inference is enabled but HF_TOKEN is not set. "
+                f"{name} inference is enabled but HF_TOKEN is not set. "
                 "Provide a valid token in HF_TOKEN environment variable.",
-                provider="huggingface",
+                provider="groq" if self.is_groq else "huggingface",
             )
         return {
             "Authorization": f"Bearer {self.token}",
@@ -68,9 +78,20 @@ class HuggingFaceProvider(LLMProvider):
         }
 
     def _resolve_url(self) -> str:
-        """Resolve modern Hugging Face router endpoint, sanitizing legacy or provider-pinned paths."""
+        """Resolve modern OpenAI-compatible router/endpoint."""
         url = self.base_url.strip()
-        # If the base URL specifies hf-inference or legacy api-inference, sanitize to the standard multi-provider router
+
+        # Handle Groq API endpoint
+        if self.is_groq:
+            if "groq.com" in url:
+                if url.endswith("/chat/completions"):
+                    return url
+                if url.endswith("/v1"):
+                    return f"{url}/chat/completions"
+                return f"{url}/openai/v1/chat/completions"
+            return "https://api.groq.com/openai/v1/chat/completions"
+
+        # Handle Hugging Face Router endpoint
         if "api-inference.huggingface.co" in url or "hf-inference" in url or not url:
             return "https://router.huggingface.co/v1/chat/completions"
         if url.endswith("/v1/chat/completions") or url.endswith("/chat/completions"):
@@ -80,18 +101,25 @@ class HuggingFaceProvider(LLMProvider):
         return f"{url}/v1/chat/completions"
 
     async def generate(self, messages: list[ChatMessage], temperature: float) -> str:
-        """Call Hugging Face Chat Completions endpoint with automated multi-model fallback."""
+        """Call Chat Completions endpoint with automated multi-model fallback."""
         headers = self._get_headers()
         url = self._resolve_url()
 
-        # Safe temperature clamping: some HF models require temperature > 0.0 or <= 1.5
+        # Safe temperature clamping
         clamped_temp = max(0.01, min(temperature, 1.99)) if temperature > 0 else 0.01
 
-        # Build sequence of models to try: requested model first, followed by verified fallbacks
-        models_to_try = [self.model]
-        for m in self.FALLBACK_MODELS:
-            if m not in models_to_try:
-                models_to_try.append(m)
+        # Build sequence of models to try
+        if self.is_groq:
+            groq_fallbacks = ("llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768")
+            models_to_try = [self.model]
+            for m in groq_fallbacks:
+                if m not in models_to_try:
+                    models_to_try.append(m)
+        else:
+            models_to_try = [self.model]
+            for m in self.FALLBACK_MODELS:
+                if m not in models_to_try:
+                    models_to_try.append(m)
 
         last_response = None
         for attempt_model in models_to_try:
@@ -214,18 +242,50 @@ class HuggingFaceProvider(LLMProvider):
             ) from err
 
     async def check_health(self) -> dict[str, Any]:
-        """Check Hugging Face configuration and model connectivity."""
+        """Check provider configuration and model connectivity."""
         if not self.token:
+            provider_label = "Groq" if self.is_groq else "HF_TOKEN"
             return {
                 "reachable": False,
                 "configured": False,
-                "error": "HF_TOKEN is not configured in environment.",
+                "error": f"{provider_label} token is not configured in environment.",
             }
 
-        # Check model reachability via Hugging Face Hub API
+        headers = self._get_headers()
+
+        # Branch for Groq API
+        if self.is_groq:
+            try:
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    resp = await client.get("https://api.groq.com/openai/v1/models", headers=headers)
+                if resp.status_code == 200:
+                    return {
+                        "reachable": True,
+                        "configured": True,
+                        "provider": "groq",
+                        "model": self.model,
+                    }
+                elif resp.status_code in (401, 403):
+                    return {
+                        "reachable": False,
+                        "configured": True,
+                        "error": "Authentication token was rejected by Groq. Please check your Groq API key.",
+                    }
+                return {
+                    "reachable": False,
+                    "configured": True,
+                    "error": f"Groq API returned HTTP {resp.status_code}",
+                }
+            except Exception as err:
+                return {
+                    "reachable": False,
+                    "configured": True,
+                    "error": f"Cannot connect to Groq: {err}",
+                }
+
+        # Branch for Hugging Face Hub API
         meta_url = f"https://huggingface.co/api/models/{self.model}"
         try:
-            headers = {"Authorization": f"Bearer {self.token}"}
             async with httpx.AsyncClient(timeout=4.0) as client:
                 resp = await client.get(meta_url, headers=headers)
             if resp.status_code == 200:
