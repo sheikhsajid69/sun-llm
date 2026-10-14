@@ -853,20 +853,24 @@
     }
 
     .btn-close-sidebar {
-      display: none;
-      background: none;
-      border: 1px solid var(--hairline);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: 1px solid var(--hairline-strong);
       border-radius: var(--radius-sm);
-      color: var(--ink);
+      color: var(--mute);
       font-family: var(--font-mono);
       font-size: 13px;
       font-weight: 700;
       padding: 4px 8px;
       cursor: pointer;
       line-height: 1;
+      transition: color 0.12s ease, border-color 0.12s ease, background-color 0.12s ease;
     }
 
     .btn-close-sidebar:hover {
+      color: var(--ink);
       background-color: var(--surface-card);
       border-color: var(--ink);
     }
@@ -912,9 +916,8 @@
       }
 
       .btn-close-sidebar {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
+        padding: 5px 10px;
+        min-height: 32px;
       }
 
       .stage-header {
@@ -1257,10 +1260,14 @@
       const btnSend = document.getElementById("btn-send");
       const errorNotice = document.getElementById("error-notice");
 
+      function closeSidebar() {
+        sidebar.classList.add("collapsed");
+        if (sidebarBackdrop) sidebarBackdrop.classList.remove("active");
+      }
+
       function closeSidebarOnMobile() {
         if (window.innerWidth <= 768) {
-          sidebar.classList.add("collapsed");
-          if (sidebarBackdrop) sidebarBackdrop.classList.remove("active");
+          closeSidebar();
         }
       }
 
@@ -1678,7 +1685,46 @@
         }
       };
 
-      [btnCloseSidebar, sidebarBackdrop].forEach(el => el && (el.onclick = closeSidebarOnMobile));
+      [btnCloseSidebar, sidebarBackdrop].forEach(el => el && (el.onclick = (e) => {
+        e.stopPropagation();
+        closeSidebar();
+      }));
+
+      // Click outside sidebar on mobile/tablets to dismiss
+      document.addEventListener("click", (e) => {
+        if (window.innerWidth <= 768 && !sidebar.classList.contains("collapsed")) {
+          if (!sidebar.contains(e.target) && !btnToggleSidebar.contains(e.target)) {
+            closeSidebar();
+          }
+        }
+      });
+
+      // Escape key to dismiss sidebar on any device
+      window.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && !sidebar.classList.contains("collapsed")) {
+          closeSidebar();
+        }
+      });
+
+      // Touch swipe left on mobile to dismiss sidebar
+      let touchStartX = 0;
+      let touchStartY = 0;
+      sidebar.addEventListener("touchstart", (e) => {
+        if (e.changedTouches && e.changedTouches[0]) {
+          touchStartX = e.changedTouches[0].screenX;
+          touchStartY = e.changedTouches[0].screenY;
+        }
+      }, { passive: true });
+
+      sidebar.addEventListener("touchend", (e) => {
+        if (e.changedTouches && e.changedTouches[0]) {
+          const diffX = touchStartX - e.changedTouches[0].screenX;
+          const diffY = Math.abs(touchStartY - e.changedTouches[0].screenY);
+          if (diffX > 45 && diffY < 50) {
+            closeSidebar();
+          }
+        }
+      }, { passive: true });
 
       window.addEventListener("resize", () => {
         if (window.innerWidth > 768 && sidebarBackdrop) {
