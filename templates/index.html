@@ -903,7 +903,6 @@
       }
 
       .sidebar.collapsed {
-        margin-left: 0;
         transform: translateX(-100%);
       }
 
@@ -1674,31 +1673,15 @@
          ----------------------------------------------------------------------- */
       btnToggleSidebar.onclick = () => {
         const isCollapsed = sidebar.classList.toggle("collapsed");
-        if (window.innerWidth <= 768) {
-          if (!isCollapsed) {
-            sidebarBackdrop.classList.add("active");
-          } else {
-            sidebarBackdrop.classList.remove("active");
-          }
+        if (sidebarBackdrop) {
+          sidebarBackdrop.classList.toggle("active", !isCollapsed && window.innerWidth <= 768);
         }
       };
 
-      if (btnCloseSidebar) {
-        btnCloseSidebar.onclick = () => {
-          sidebar.classList.add("collapsed");
-          sidebarBackdrop.classList.remove("active");
-        };
-      }
-
-      if (sidebarBackdrop) {
-        sidebarBackdrop.onclick = () => {
-          sidebar.classList.add("collapsed");
-          sidebarBackdrop.classList.remove("active");
-        };
-      }
+      [btnCloseSidebar, sidebarBackdrop].forEach(el => el && (el.onclick = closeSidebarOnMobile));
 
       window.addEventListener("resize", () => {
-        if (window.innerWidth > 768) {
+        if (window.innerWidth > 768 && sidebarBackdrop) {
           sidebarBackdrop.classList.remove("active");
         }
       });
